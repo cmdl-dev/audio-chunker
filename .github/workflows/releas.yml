@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*' # Triggers on tags like v1.0.0
+
+jobs:
+  build:
+    name: Build and Release Binaries
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22' # or your preferred Go version
+
+      - name: Build for Linux
+        run: |
+          GOOS=linux GOARCH=amd64 go build -o audiochunker-linux
+      - name: Build for macOS
+        run: |
+          GOOS=darwin GOARCH=amd64 go build -o audiochunker-darwin
+      - name: Build for Windows
+        run: |
+          GOOS=windows GOARCH=amd64 go build -o audiochunker.exe
+
+      - name: Generate SHA256 checksums
+        run: |
+          sha256sum audiochunker* > checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            audiochunker-linux
+            audiochunker-darwin
+            audiochunker.exe
+            checksums.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
