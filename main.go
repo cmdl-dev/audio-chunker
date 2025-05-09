@@ -28,10 +28,12 @@ type Chunk struct {
 
 func detectSilences(file string, noise int, threshold float64) ([]Silence, error) {
 	// FFmpeg command to detect silence
+	af := fmt.Sprintf("silencedetect=noise=%ddB:d=%.2f", noise, threshold)
+
 	cmd := exec.Command(
 		"ffmpeg",
 		"-i", file,
-		"-af", fmt.Sprintf("silencedetect=noise=%ddB:d=%f", noise, threshold),
+		"-af", af,
 		"-f", "null", "-",
 	)
 
@@ -86,7 +88,7 @@ func detectSilences(file string, noise int, threshold float64) ([]Silence, error
 	return silences, nil
 }
 
-func chunkAudioSegment(inputFile, outputDir string, start, end float64, chunk int) (string, error) {
+func chunkAudioSegment(inputFile, outputDir string, start, end float64) (string, error) {
 	// Ensure output directory exists
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return "", err
@@ -95,10 +97,11 @@ func chunkAudioSegment(inputFile, outputDir string, start, end float64, chunk in
 	ext := filepath.Ext(inputFile)
 
 	// Output pattern: outputDir/chunk_%03d.mp3
-	outputPattern := filepath.Join(outputDir, fmt.Sprintf("chunk_%d%s", chunk, ext))
+	outputPattern := filepath.Join(outputDir, fmt.Sprintf("chunk_%d-%d%s", int(start), int(end), ext))
 
 	cmd := exec.Command(
 		"ffmpeg",
+		"-y",
 		"-ss", fmt.Sprintf("%.2f", start),
 		"-to", fmt.Sprintf("%.2f", end),
 		"-i", inputFile,
@@ -107,7 +110,6 @@ func chunkAudioSegment(inputFile, outputDir string, start, end float64, chunk in
 	)
 
 	// Optional: print ffmpeg output for debugging
-	// cmd.Stdout = os.Stdout
 	// cmd.Stderr = os.Stderr
 
 	err := cmd.Run()
@@ -144,7 +146,6 @@ func main() {
 		minDur    int
 		noise     int
 		threshold float64
-		compress  bool
 	)
 
 	var rootCmd = &cobra.Command{
@@ -159,7 +160,7 @@ func main() {
 				os.Exit(1)
 			}
 
-			removeSilence(file, outDir, noise, threshold, compress)
+			removeSilence(file, outDir, noise, minDur, threshold)
 		},
 	}
 
@@ -196,15 +197,8 @@ func main() {
 		&noise,
 		"noise",
 		"n",
-		30,
+		-30,
 		"Maximum noise limit to apply during processing (optional)",
-	)
-	rootCmd.Flags().BoolVarP(
-		&compress,
-		"compress",
-		"c",
-		true,
-		"Should compress the output (optional)",
 	)
 
 	// Mark required flags
@@ -218,7 +212,7 @@ func main() {
 
 }
 
-func removeSilence(file, outDir string, noiseLimit int, threshold float64, shouldCompress bool) {
+func removeSilence(file, outDir string, noiseLimit, minDur int, threshold float64) {
 	res, err := detectSilences(file, noiseLimit, threshold)
 	if err != nil {
 		log.Fatal(err)
@@ -227,28 +221,29 @@ func removeSilence(file, outDir string, noiseLimit int, threshold float64, shoul
 	var chunks []Chunk
 	var cursor float64 = 0
 	for _, r := range res {
-		chunks = append(chunks, Chunk{
+		newChunk := Chunk{
 			start:    cursor,
 			end:      r.Start,
 			duration: r.Start - cursor,
-		})
+		}
 		cursor = r.End
+
+		if float64(newChunk.duration) > float64(minDur) {
+			chunks = append(chunks, newChunk)
+		}
 	}
 
-	i := 0
-	for _, r := range chunks {
-		if r.duration < 3 {
+	fmt.Println("Chunking Audio Segments")
+	for i, r := range chunks {
+		fmt.Printf("\r%d/%d", i, len(chunks))
+		if r.duration < float64(minDur) {
 			continue
 		}
-		outFile, err := chunkAudioSegment(file, outDir, r.start, r.end, i)
+		_, err := chunkAudioSegment(file, outDir, r.start, r.end)
 		if err != nil {
 			log.Fatal(err)
 		}
-
-		if shouldCompress {
-			compressAudio(outFile, "compress")
-		}
-		i += 1
 	}
 
+	fmt.Printf("\nSaved to %s\n", outDir)
 }
