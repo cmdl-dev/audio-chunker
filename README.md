@@ -44,13 +44,17 @@ audiochunker -f <input_file> -o <output_dir> [options]
 
 ### Optional Flags
 
+- `-m, --minDur int`  
+  Minimum duration in seconds that the clip has to be.  
+  Default: `3`
+
 - `-n, --noise int`  
   Maximum noise limit to apply during processing.  
-  Default: `0`
+  Default: `-30`
 
 - `-t, --threshold float`  
   Threshold value for processing (e.g., 0.5).  
-  Default: `0.0`
+  Default: `0.5`
 
 - `-h, --help`  
   Show help message.

@@ -181,7 +181,7 @@ func main() {
 	)
 	rootCmd.Flags().IntVarP(
 		&minDur,
-		"minDir",
+		"minDur",
 		"m",
 		3,
 		"Minimum duration in seconds that the clip has to be (optional)",
